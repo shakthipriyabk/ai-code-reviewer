@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Code Reviewer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222536;
+    --border: #2e3148;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --text: #e8eaf0;
+    --muted: #7b7f9e;
+    --danger: #ff6b6b;
+    --success: #00d4aa;
+    --radius: 12px;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: calc(100vh - 65px);
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .panel-header h2 { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .lang-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .lang-select:focus { border-color: var(--accent); }
+
+  #code-input {
+    flex: 1;
+    width: 100%;
+    background: var(--bg);
+    border: none;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 1.5rem;
+    resize: none;
+    outline: none;
+  }
+
+  #code-input::placeholder { color: var(--muted); }
+
+  .panel-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .char-count { font-size: 12px; color: var(--muted); }
+
+  #review-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.2s, transform 0.1s;
+    font-family: 'Inter', sans-serif;
+  }
+
+  #review-btn:hover { opacity: 0.9; }
+  #review-btn:active { transform: scale(0.98); }
+  #review-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .output-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .output-panel .panel-header { background: var(--surface); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .placeholder {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+  }
+
+  .placeholder-icon { font-size: 48px; opacity: 0.3; }
+  .placeholder p { font-size: 14px; }
+
+  .review-content h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin: 1.2rem 0 0.5rem;
+  }
+
+  .review-content h3:first-child { margin-top: 0; }
+
+  .review-content p { margin-bottom: 0.8rem; color: var(--text); }
+
+  .review-content code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+  }
+
+  .review-content pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+  }
+
+  .review-content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .review-content ul, .review-content ol {
+    padding-left: 1.5rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .review-content li { margin-bottom: 0.4rem; }
+
+  .review-content strong { color: var(--accent2); font-weight: 600; }
+
+  .error-msg {
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: var(--radius);
+    padding: 1rem;
+    color: var(--danger);
+    font-size: 14px;
+  }
+
+  .loading-animation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+    color: var(--muted);
+  }
+
+  .loading-dots { display: flex; gap: 6px; }
+  .loading-dots span {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-8px); opacity: 1; }
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(108, 99, 255, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(108, 99, 255, 0.3);
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔍</div>
+  <h1>AI Code Reviewer</h1>
+  <span>Powered by Gemini</span>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Your Code</h2>
+      <select class="lang-select" id="language">
+        <option value="java">Java</option>
+        <option value="python">Python</option>
+        <option value="javascript">JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="c++">C++</option>
+        <option value="c">C</option>
+        <option value="go">Go</option>
+        <option value="rust">Rust</option>
+        <option value="sql">SQL</option>
+      </select>
+    </div>
+
+    <textarea id="code-input" placeholder="// Paste your code here and click Review...&#10;&#10;public class Main {&#10;    public static void main(String[] args) {&#10;        System.out.println(&quot;Hello World&quot;);&#10;    }&#10;}"></textarea>
+
+    <div class="panel-footer">
+      <span class="char-count" id="char-count">0 characters</span>
+      <button id="review-btn" onclick="reviewCode()">
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-text">Review Code ✨</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="output-panel">
+    <div class="panel-header">
+      <h2>AI Review</h2>
+      <div class="status-dot" id="status-dot"></div>
+    </div>
+
+    <div id="output">
+      <div class="placeholder">
+        <div class="placeholder-icon">🤖</div>
+        <p>Paste your code and click Review</p>
+        <p style="font-size:12px; opacity:0.6;">Gemini will analyze bugs, style & improvements</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const codeInput = document.getElementById('code-input');
+  const charCount = document.getElementById('char-count');
+
+  codeInput.addEventListener('input', () => {
+    const len = codeInput.value.length;
+    charCount.textContent = len + ' character' + (len !== 1 ? 's' : '');
+  });
+
+  function formatReview(text) {
+    text = text
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^\* (.+)$/gm, '<li>$1</li>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br/>');
+    return '<div class="review-content"><p>' + text + '</p></div>';
+  }
+
+  async function reviewCode() {
+    const code = codeInput.value.trim();
+    const language = document.getElementById('language').value;
+
+    if (!code) {
+      document.getElementById('output').innerHTML = '<div class="error-msg">⚠️ Please paste some code first!</div>';
+      return;
+    }
+
+    const btn = document.getElementById('review-btn');
+    const spinner = document.getElementById('spinner');
+    const btnText = document.getElementById('btn-text');
+    const statusDot = document.getElementById('status-dot');
+
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Reviewing...';
+    statusDot.classList.add('active');
+
+    document.getElementById('output').innerHTML = `
+      <div class="loading-animation">
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <p>Analyzing your ${language} code...</p>
+      </div>`;
+
+    try {
+      const response = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, language })
+      });
+
+      const data = await response.json();
+
+      let reviewText = '';
+      if (data.candidates && data.candidates[0]) {
+        reviewText = data.candidates[0].content.parts[0].text;
+      } else if (data.error) {
+        throw new Error(data.error.message || 'API error');
+      } else {
+        reviewText = JSON.stringify(data, null, 2);
+      }
+
+      document.getElementById('output').innerHTML = formatReview(reviewText);
+
+    } catch (err) {
+      document.getElementById('output').innerHTML =
+        `<div class="error-msg">❌ Error: ${err.message}<br/><br/>Make sure the backend is running on port 8080.</div>`;
+    } finally {
+      btn.disabled = false;
+      spinner.style.display = 'none';
+      btnText.textContent = 'Review Code ✨';
+      statusDot.classList.remove('active');
+    }
+  }
+
+  document.getElementById('code-input').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') reviewCode();
+  });
+</script>
+</body>
+</html>
